@@ -4,6 +4,14 @@
 运行方式: streamlit run streamlit_app.py
 """
 
+# 修复 Streamlit Cloud 上 opencv-python 缺少 libGL 的问题
+import subprocess, sys as _sys
+try:
+    import cv2  # noqa: F401
+except ImportError:
+    subprocess.check_call([_sys.executable, "-m", "pip", "install", "-q",
+                           "opencv-python-headless", "--force-reinstall"])
+
 import streamlit as st
 import cv2
 import numpy as np
