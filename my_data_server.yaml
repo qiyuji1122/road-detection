@@ -1,0 +1,10 @@
+# 道路病害目标检测数据集配置（服务器版）
+path: /data2/aipub/lijiaxin/road_detection/dataset_rdd_5k/
+train: train/images
+val: val/images
+test: test/images
+
+nc: 2
+names:
+  0: crack
+  1: pothole

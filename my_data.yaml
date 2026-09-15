@@ -1,0 +1,17 @@
+# 道路病害目标检测数据集配置
+# 数据集路径（使用绝对路径，避免出错）
+path: /Users/qiyuji/Documents/道路目标检测YOLOv11/dataset_rdd_5k/
+train: train/images    # 训练图片相对路径
+val: val/images        # 验证图片相对路径
+test: test/images      # 测试图片相对路径（可选）
+
+# 类别数配置
+nc: 2  # 当前2类（crack + pothole）
+
+# 类别名称
+names:
+  0: crack     # 裂缝（含纵向裂缝、横向裂缝、龟裂）
+  1: pothole   # 坑洼
+  # 后续补充数据后添加：
+  # 2: bump      # 鼓包
+  # 3: loose     # 松散

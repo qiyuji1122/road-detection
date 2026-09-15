@@ -1,0 +1,9 @@
+{
+  "model_path": "/Users/qiyuji/Documents/道路目标检测YOLOv11/200轮best.pt",
+  "confidence_threshold": 0.25,
+  "iou_threshold": 0.45,
+  "camera_index": 0,
+  "resolution": "1280x720",
+  "image_save_path": "/Users/qiyuji/Documents/道路目标检测YOLOv11/data/images",
+  "auto_save_detections": true
+}

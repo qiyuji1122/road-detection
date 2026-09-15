@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 数据集（太大，不上传GitHub）
+data/
+dataset/
+dataset_rdd/
+dataset_rdd_5k/
+dataset_small/
+
+# 训练产物
+runs/
+train_log.txt
+
+# 不需要上传的模型文件（best.pt 保留用于部署）
+200轮best.pt
+yolo11n.pt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# 日志/缓存
+*.log
+eval_report.*
+per_image/
