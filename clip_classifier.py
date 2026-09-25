@@ -76,9 +76,37 @@ class CLIPClassifier:
                 device = "cpu"
 
         self.device = device
-        self.model, _, self.preprocess = open_clip.create_model_and_transforms(
-            model_name, pretrained=pretrained
-        )
+        cache_dir = os.environ.get("CLIP_CACHE_DIR") or None
+        try:
+            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                model_name, pretrained=pretrained, cache_dir=cache_dir
+            )
+        except RuntimeError:
+            # Some networks can reach OpenAI's public model storage but not the
+            # Hugging Face metadata/Xet endpoint used by newer open_clip builds.
+            # Retry the same official checkpoint through its direct URL so the
+            # CLIP centre does not fail solely because one mirror is unavailable.
+            from open_clip.pretrained import download_pretrained
+
+            cfg = open_clip.get_pretrained_cfg(model_name, pretrained)
+            direct_cfg = dict(cfg or {})
+            direct_cfg["hf_hub"] = ""
+            if not direct_cfg.get("url"):
+                raise
+            checkpoint = download_pretrained(direct_cfg, cache_dir=cache_dir)
+            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                model_name,
+                pretrained=checkpoint,
+                cache_dir=cache_dir,
+                force_quick_gelu=bool(direct_cfg.get("quick_gelu", False)),
+                image_mean=direct_cfg.get("mean"),
+                image_std=direct_cfg.get("std"),
+                image_interpolation=direct_cfg.get("interpolation"),
+                image_resize_mode=direct_cfg.get("resize_mode"),
+                # The official OpenAI checkpoint is a TorchScript archive.
+                # PyTorch 2.6+ requires this explicit opt-out for that format.
+                weights_only=False,
+            )
         self.model = self.model.to(device)
         self.model.eval()
         self.tokenizer = open_clip.get_tokenizer(model_name)

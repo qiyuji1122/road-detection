@@ -19,33 +19,121 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 THEME_CSS = """
 <style>
+    :root {
+        --bg: #07111f;
+        --panel: rgba(12, 29, 48, .86);
+        --panel-2: #0c1b2d;
+        --line: rgba(148, 163, 184, .15);
+        --muted: #8fa5ba;
+        --text: #eaf3fb;
+        --brand: #19c2b1;
+        --brand-2: #38bdf8;
+        --warning: #f3b55b;
+    }
     .stApp {
-        background-color: #0a0e1a;
-        color: #e0e6f0;
+        color: var(--text);
+        background:
+            radial-gradient(circle at 78% 2%, rgba(25, 194, 177, .08), transparent 30%),
+            radial-gradient(circle at 2% 38%, rgba(56, 189, 248, .06), transparent 24%),
+            var(--bg);
     }
-    .stSidebar {
-        background-color: #0d1225;
-        border-right: 1px solid #1a2744;
+    .stApp, .stApp button, .stApp input, .stApp textarea {
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
     }
-    h1, h2, h3 {
-        color: #4fc3f7;
+    .block-container { max-width: 1500px; padding-top: 1.4rem; padding-bottom: 4rem; }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #091827 0%, #07111f 100%);
+        border-right: 1px solid var(--line);
     }
-    .stMetric {
-        background-color: #111827;
-        border: 1px solid #1e3a5f;
-        border-radius: 8px;
-        padding: 12px;
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #b7c7d6; }
+
+    /* Keep Streamlit's native reopen button available after the sidebar is collapsed. */
+    [data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stBaseButton-headerNoPadding"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 1000000 !important;
     }
-    .stMetric label { color: #94a3b8; }
-    .stMetric .metric-value { color: #4fc3f7; }
-    div[data-testid="stToolbar"] { display: none; }
-    .stFileUploader {
-        border: 2px dashed #1e3a5f;
-        border-radius: 12px;
+    div[data-testid="stToolbar"] { visibility: visible; }
+
+    h1, h2, h3 { color: #f5fbff; letter-spacing: -.025em; }
+    h1 { font-size: clamp(2rem, 3vw, 3.15rem) !important; }
+    a { color: var(--brand-2) !important; }
+    [data-testid="stMetric"] {
+        min-height: 118px;
+        background: linear-gradient(145deg, rgba(15, 39, 61, .94), rgba(9, 26, 43, .94));
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px 20px;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, .16);
     }
-    .severity-severe { color: #ef4444; font-weight: bold; }
-    .severity-moderate { color: #f59e0b; font-weight: bold; }
-    .severity-minor { color: #22c55e; font-weight: bold; }
+    [data-testid="stMetric"] label { color: var(--muted); }
+    [data-testid="stMetricValue"] { color: #f6fbff; }
+    [data-testid="stMetricDelta"] { color: var(--brand); }
+    [data-testid="stFileUploader"] {
+        border: 1px dashed rgba(56, 189, 248, .34);
+        border-radius: 16px;
+        padding: 4px;
+        background: rgba(12, 29, 48, .5);
+    }
+    [data-testid="stDataFrame"], [data-testid="stTable"] {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 8px; border-bottom: 1px solid var(--line);
+    }
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+        height: 46px; border-radius: 10px 10px 0 0; padding-inline: 18px;
+    }
+    .stButton > button, .stDownloadButton > button {
+        border-radius: 10px;
+        border: 1px solid rgba(56, 189, 248, .22);
+        min-height: 42px;
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #0ea795, #0e85ac);
+        border: 0;
+        color: white;
+        box-shadow: 0 8px 24px rgba(14, 167, 149, .22);
+    }
+    .platform-eyebrow {
+        color: #64d8cb; font-size: .76rem; font-weight: 760; letter-spacing: .14em;
+        text-transform: uppercase; margin-bottom: .55rem;
+    }
+    .platform-subtitle { color: var(--muted); font-size: 1.03rem; max-width: 800px; line-height: 1.75; }
+    .surface-card {
+        height: 100%; padding: 22px; border-radius: 18px;
+        border: 1px solid var(--line);
+        background: linear-gradient(145deg, rgba(14, 36, 57, .90), rgba(8, 25, 41, .90));
+        box-shadow: 0 14px 42px rgba(0,0,0,.15);
+    }
+    .surface-card h4 { margin: 0 0 8px; color: #edf8ff; font-size: 1.02rem; }
+    .surface-card p { margin: 0; color: var(--muted); line-height: 1.65; }
+    .status-pill {
+        display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px;
+        border-radius: 999px; background: rgba(25, 194, 177, .11);
+        border: 1px solid rgba(25, 194, 177, .25); color: #73e2d5; font-size: .78rem;
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #23d5b7; box-shadow: 0 0 12px #23d5b7; }
+    .hero-copy { padding: 20px 0 12px; }
+    .hero-copy h1 { margin: .35rem 0 .75rem; }
+    .hero-copy .lead { color: #a9bed0; font-size: 1.08rem; line-height: 1.8; max-width: 680px; }
+    .hero-points { margin-top: 1.1rem; color: #cbd9e4; font-size: .9rem; }
+    .hero-art img { border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 24px 70px rgba(0,0,0,.35); }
+    .section-kicker { color: var(--brand); font-weight: 700; font-size: .78rem; letter-spacing: .08em; }
+    .empty-panel { text-align:center; padding: 52px 24px; border: 1px dashed rgba(148,163,184,.2); border-radius: 16px; color: var(--muted); }
+    .severity-severe { color: #fb7185; font-weight: bold; }
+    .severity-moderate { color: #f6bd60; font-weight: bold; }
+    .severity-minor { color: #36d399; font-weight: bold; }
+    @media (max-width: 900px) {
+        .block-container { padding-left: 1rem; padding-right: 1rem; padding-top: .9rem; }
+        [data-testid="stHorizontalBlock"] { gap: .8rem; }
+        .hero-copy { padding-top: 0; }
+        [data-testid="stMetric"] { min-height: 100px; padding: 14px; }
+    }
 </style>
 """
 
@@ -198,8 +286,21 @@ def get_grad_cam(model, image, conf=0.25, iou=0.45):
 
 def init_session_state():
     """初始化 session_state"""
-    if "records" not in st.session_state:
-        st.session_state["records"] = []
+    defaults = {
+        "records": [],
+        "tasks": [],
+        "archives": [],
+        "clip_cases": [],
+        "system_settings": {
+            "confidence": 0.25,
+            "iou": 0.45,
+            "enable_grad_cam": False,
+            "enable_clip": False,
+        },
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value.copy() if isinstance(value, (dict, list)) else value
 
 
 def save_record(source, detections, image_b64=None):
