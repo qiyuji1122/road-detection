@@ -33,16 +33,25 @@ THEME_CSS = """
     .stApp {
         color: var(--text);
         background:
-            radial-gradient(circle at 78% 2%, rgba(25, 194, 177, .08), transparent 30%),
-            radial-gradient(circle at 2% 38%, rgba(56, 189, 248, .06), transparent 24%),
+            linear-gradient(90deg, rgba(3, 10, 20, .97) 0%, rgba(4, 15, 28, .90) 37%, rgba(4, 15, 28, .68) 72%, rgba(4, 13, 25, .76) 100%),
+            linear-gradient(180deg, rgba(3, 10, 19, .12) 0%, rgba(5, 15, 27, .50) 54%, #07111f 100%),
+            url("/app/static/autonomous-road-inspection.png") center top / cover fixed no-repeat,
             var(--bg);
+    }
+    [data-testid="stAppViewContainer"] {
+        background: transparent;
+    }
+    [data-testid="stHeader"] {
+        background: rgba(4, 13, 24, .30);
+        backdrop-filter: blur(12px);
     }
     .stApp, .stApp button, .stApp input, .stApp textarea {
         font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
     }
     .block-container { max-width: 1500px; padding-top: 1.4rem; padding-bottom: 4rem; }
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #091827 0%, #07111f 100%);
+        background: linear-gradient(180deg, rgba(9, 24, 39, .96) 0%, rgba(7, 17, 31, .97) 100%);
+        backdrop-filter: blur(18px);
         border-right: 1px solid var(--line);
     }
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #b7c7d6; }
@@ -119,6 +128,13 @@ THEME_CSS = """
     }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #23d5b7; box-shadow: 0 0 12px #23d5b7; }
     .hero-copy { padding: 20px 0 12px; }
+    .hero-copy {
+        min-height: 385px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-shadow: 0 2px 28px rgba(0, 0, 0, .58);
+    }
     .hero-copy h1 { margin: .35rem 0 .75rem; }
     .hero-copy .lead { color: #a9bed0; font-size: 1.08rem; line-height: 1.8; max-width: 680px; }
     .hero-points { margin-top: 1.1rem; color: #cbd9e4; font-size: .9rem; }
@@ -129,9 +145,13 @@ THEME_CSS = """
     .severity-moderate { color: #f6bd60; font-weight: bold; }
     .severity-minor { color: #36d399; font-weight: bold; }
     @media (max-width: 900px) {
+        .stApp {
+            background-position: 64% top;
+            background-attachment: scroll;
+        }
         .block-container { padding-left: 1rem; padding-right: 1rem; padding-top: .9rem; }
         [data-testid="stHorizontalBlock"] { gap: .8rem; }
-        .hero-copy { padding-top: 0; }
+        .hero-copy { min-height: 340px; padding-top: 0; }
         [data-testid="stMetric"] { min-height: 100px; padding: 14px; }
     }
 </style>

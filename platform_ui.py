@@ -31,7 +31,6 @@ from streamlit_utils import (
 
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-HERO_IMAGE = os.path.join(APP_DIR, "assets", "autonomous-road-inspection.png")
 
 NAV_ITEMS = [
     ("数据总览", "⌂"),
@@ -218,9 +217,9 @@ def render_overview():
             st.session_state["nav_page"] = "CLIP 创新中心"
             st.rerun()
     with right:
-        st.markdown('<div class="hero-art">', unsafe_allow_html=True)
-        st.image(HERO_IMAGE, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        # Keep this side intentionally open so the autonomous inspection vehicle
+        # remains visible in the full-page background artwork.
+        st.markdown('<div aria-hidden="true" style="min-height:385px"></div>', unsafe_allow_html=True)
 
     st.markdown("### 今日运行概览")
     c1, c2, c3, c4 = st.columns(4)
