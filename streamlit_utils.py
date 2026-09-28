@@ -35,7 +35,7 @@ THEME_CSS = """
         background:
             linear-gradient(90deg, rgba(3, 10, 20, .97) 0%, rgba(4, 15, 28, .90) 37%, rgba(4, 15, 28, .68) 72%, rgba(4, 13, 25, .76) 100%),
             linear-gradient(180deg, rgba(3, 10, 19, .12) 0%, rgba(5, 15, 27, .50) 54%, #07111f 100%),
-            url("/app/static/autonomous-road-inspection.png") center top / cover fixed no-repeat,
+            url("app/static/autonomous-road-inspection.png") center top / cover fixed no-repeat,
             var(--bg);
     }
     [data-testid="stAppViewContainer"] {
