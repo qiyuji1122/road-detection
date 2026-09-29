@@ -35,7 +35,7 @@ from streamlit_utils import (
 
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-PLATFORM_VERSION = "2.2"
+PLATFORM_VERSION = "2.2.1"
 
 NAV_ITEMS = [
     ("数据总览", "⌂"),
@@ -91,6 +91,12 @@ def empty_panel(title: str, body: str):
 
 def _settings() -> dict:
     return st.session_state["system_settings"]
+
+
+def _navigate(page: str):
+    """Keep the content route and sidebar selection in sync."""
+    st.session_state["nav_page"] = page
+    st.session_state["sidebar_nav"] = page
 
 
 def _read_image(uploaded_file):
@@ -221,12 +227,19 @@ def render_overview():
             unsafe_allow_html=True,
         )
         q1, q2 = st.columns(2)
-        if q1.button("开始检测", type="primary", use_container_width=True):
-            st.session_state["nav_page"] = "检测中心"
-            st.rerun()
-        if q2.button("进入 CLIP 创新中心", use_container_width=True):
-            st.session_state["nav_page"] = "CLIP 创新中心"
-            st.rerun()
+        q1.button(
+            "开始检测",
+            type="primary",
+            use_container_width=True,
+            on_click=_navigate,
+            args=("检测中心",),
+        )
+        q2.button(
+            "进入 CLIP 创新中心",
+            use_container_width=True,
+            on_click=_navigate,
+            args=("CLIP 创新中心",),
+        )
     with right:
         # Keep this side intentionally open so the autonomous inspection vehicle
         # remains visible in the full-page background artwork.

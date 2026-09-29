@@ -12,13 +12,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit_utils as app_utils
 
 # Streamlit Cloud may keep imported modules alive during a hot deployment.
-# Reload only when upgrading an already-running pre-v2.2 process.
-if getattr(app_utils, "PLATFORM_VERSION", "") != "2.2":
+# Reload only when upgrading an already-running older process.
+if getattr(app_utils, "PLATFORM_VERSION", "") != "2.2.1":
     app_utils = importlib.reload(app_utils)
 
 import platform_ui as platform
 
-if getattr(platform, "PLATFORM_VERSION", "") != "2.2":
+if getattr(platform, "PLATFORM_VERSION", "") != "2.2.1":
     platform = importlib.reload(platform)
 
 NAV_ITEMS = platform.NAV_ITEMS
@@ -82,7 +82,7 @@ with st.sidebar:
     else:
         st.warning("检测权重未加载")
     st.markdown("---")
-    st.caption("v2.2 · 历史数据持久化\n\n© 2026 智巡路网")
+    st.caption("v2.2.1 · 导航交互优化\n\n© 2026 智巡路网")
 
 
 renderer = PAGE_RENDERERS.get(st.session_state["nav_page"], PAGE_RENDERERS["数据总览"])

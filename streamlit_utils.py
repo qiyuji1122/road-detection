@@ -14,7 +14,7 @@ from datetime import datetime
 
 # 项目根目录
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-PLATFORM_VERSION = "2.2"
+PLATFORM_VERSION = "2.2.1"
 DATA_DIR = os.path.join(APP_DIR, "data")
 STATE_FILE = os.path.join(DATA_DIR, "platform_state.json")
 PERSISTED_KEYS = ("records", "tasks", "archives", "clip_cases", "system_settings")
