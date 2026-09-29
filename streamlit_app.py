@@ -66,7 +66,7 @@ with st.sidebar:
     else:
         st.warning("检测权重未加载")
     st.markdown("---")
-    st.caption("v2.1 · 车路协同视觉智能\n\n© 2026 智巡路网")
+    st.caption("v2.2 · 历史数据持久化\n\n© 2026 智巡路网")
 
 
 renderer = PAGE_RENDERERS.get(st.session_state["nav_page"], PAGE_RENDERERS["数据总览"])

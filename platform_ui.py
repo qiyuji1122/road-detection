@@ -19,12 +19,16 @@ import streamlit as st
 from streamlit_utils import (
     auto_load_model,
     b64_to_image,
+    export_state_backup,
     export_csv,
     generate_report,
     get_records,
+    get_storage_info,
     get_statistics,
     image_to_b64,
     load_clip_classifier,
+    persist_session_state,
+    restore_state_backup,
     run_detection,
     save_record,
 )
@@ -38,6 +42,7 @@ NAV_ITEMS = [
     ("实时检测", "◉"),
     ("CLIP 创新中心", "✦"),
     ("检测任务", "✓"),
+    ("往期数据", "◷"),
     ("病害档案", "▤"),
     ("数据看板", "▥"),
     ("模型与实验", "◇"),
@@ -112,10 +117,13 @@ def _register_task(name: str, source: str, status: str = "已完成", result_id:
             "结果记录": result_id,
         },
     )
+    persist_session_state()
 
 
 def _register_archive(record_id: str, detections: list, source: str):
     archive = st.session_state["archives"]
+    record = next((item for item in get_records() if item.get("id") == record_id), {})
+    detected_at = record.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     existing = {(item.get("记录编号"), item.get("目标序号")) for item in archive}
     for index, det in enumerate(detections, 1):
         key = (record_id, index)
@@ -128,6 +136,7 @@ def _register_archive(record_id: str, detections: list, source: str):
                 "记录编号": record_id,
                 "目标序号": index,
                 "来源": source,
+                "检测时间": detected_at,
                 "原始分类": det.get("类别", "unknown"),
                 "当前分类": det.get("CLIP细分") or det.get("类别", "unknown"),
                 "置信度": float(det.get("置信度", 0) or 0),
@@ -137,6 +146,7 @@ def _register_archive(record_id: str, detections: list, source: str):
                 "更新时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
             },
         )
+    persist_session_state()
 
 
 def _save_detection_result(source: str, file_name: str, annotated, detections: list) -> str:
@@ -433,6 +443,7 @@ def render_clip_center():
                             "severity": det.get("严重等级"),
                             "source": uploaded.name,
                         })
+                    persist_session_state()
                     st.success(f"细分类完成，{len(detections)} 个目标已进入相似案例索引。")
                     _render_image_result(image, annotated, detections, latency, "clip_fine")
                 except Exception as exc:
@@ -526,6 +537,7 @@ def render_tasks():
         if st.button("重试所选任务", type="primary"):
             task = next(t for t in tasks if t["任务编号"] == selected)
             task.update({"状态": "处理中", "进度": 5})
+            persist_session_state()
             st.info("任务已重新进入队列。请回到原始输入页面重新提供检测源。")
     records = get_records()
     if records:
@@ -539,23 +551,183 @@ def _backfill_archive():
         _register_archive(record.get("id", "REC"), record.get("detections", []), record.get("source", "历史记录"))
 
 
+def render_history():
+    records = sorted(get_records(), key=lambda item: item.get("timestamp", ""), reverse=True)
+    page_header("HISTORICAL DATA", "往期数据", "按日期保留每天的检测结果，支持追溯、筛选、查看明细与完整备份。", "自动持久化")
+    storage = get_storage_info()
+    if storage["error"]:
+        st.error(f"历史数据写入异常：{storage['error']}")
+    else:
+        updated = storage["updated_at"].replace("T", " ") if storage["updated_at"] else "尚未产生记录"
+        st.caption(f"数据会在每次检测、任务变更和人工复核后自动保存 · 最近保存：{updated}")
+
+    if not records:
+        empty_panel("暂无往期数据", "完成一次图片、视频、实时或 CLIP 检测后，记录会按日期自动归档，并在刷新后恢复。")
+        st.download_button("下载空白数据备份", export_state_backup(), "road_inspection_backup.json", "application/json")
+        backup = st.file_uploader("恢复历史备份", type=["json"], key="history_restore_empty")
+        if st.button("导入备份", disabled=backup is None, key="history_restore_empty_button"):
+            try:
+                restore_state_backup(backup.getvalue())
+                st.success("历史备份已恢复。")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"备份恢复失败：{exc}")
+        return
+
+    record_days = [item.get("timestamp", "")[:10] for item in records if item.get("timestamp")]
+    parsed_days = [datetime.strptime(day, "%Y-%m-%d").date() for day in record_days]
+    min_day, max_day = min(parsed_days), max(parsed_days)
+    filters = st.columns([1, 1, 1.15, 1.4])
+    date_from = filters[0].date_input("开始日期", value=min_day, min_value=min_day, max_value=max_day, key="history_from")
+    date_to = filters[1].date_input("结束日期", value=max_day, min_value=min_day, max_value=max_day, key="history_to")
+    all_sources = sorted({item.get("source", "未知来源") for item in records})
+    sources = filters[2].multiselect("检测来源", all_sources, default=all_sources, key="history_sources")
+    keyword = filters[3].text_input("搜索", placeholder="记录编号 / 病害类别 / 严重程度", key="history_keyword").strip().lower()
+
+    filtered = []
+    for record in records:
+        day = record.get("timestamp", "")[:10]
+        if not day or not (date_from.isoformat() <= day <= date_to.isoformat()):
+            continue
+        if sources and record.get("source", "未知来源") not in sources:
+            continue
+        searchable = " ".join([
+            record.get("id", ""), record.get("source", ""),
+            *[str(value) for det in record.get("detections", []) for value in det.values()],
+        ]).lower()
+        if keyword and keyword not in searchable:
+            continue
+        filtered.append(record)
+
+    selected_ids = {record.get("id") for record in filtered}
+    related_archives = [item for item in st.session_state["archives"] if item.get("记录编号") in selected_ids]
+    total_targets = sum(item.get("detection_count", len(item.get("detections", []))) for item in filtered)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("历史批次", len(filtered))
+    c2.metric("病害目标", total_targets)
+    c3.metric("覆盖天数", len({item.get("timestamp", "")[:10] for item in filtered}))
+    c4.metric("已复核档案", sum(item.get("复核状态") == "已复核" for item in related_archives))
+
+    daily = {}
+    for record in filtered:
+        day = record.get("timestamp", "")[:10]
+        bucket = daily.setdefault(day, {"日期": day, "检测批次": 0, "病害目标": 0, "来源": set()})
+        bucket["检测批次"] += 1
+        bucket["病害目标"] += record.get("detection_count", len(record.get("detections", [])))
+        bucket["来源"].add(record.get("source", "未知来源"))
+    daily_rows = [{**item, "来源": "、".join(sorted(item["来源"]))} for _, item in sorted(daily.items(), reverse=True)]
+    st.markdown("#### 每日归档")
+    st.dataframe(daily_rows, use_container_width=True, hide_index=True)
+
+    record_rows = []
+    for record in filtered:
+        detections = record.get("detections", [])
+        classes = sorted({det.get("CLIP细分") or det.get("类别", "unknown") for det in detections})
+        severe = sum(det.get("严重等级") == "严重" for det in detections)
+        record_rows.append({
+            "记录编号": record.get("id", ""),
+            "检测时间": record.get("timestamp", ""),
+            "来源": record.get("source", ""),
+            "目标数": record.get("detection_count", len(detections)),
+            "病害类型": "、".join(classes) if classes else "未检出",
+            "严重目标": severe,
+        })
+    st.markdown("#### 检测记录")
+    st.dataframe(record_rows, use_container_width=True, hide_index=True)
+
+    if filtered:
+        selected = st.selectbox("查看记录明细", [item.get("id") for item in filtered], key="history_selected")
+        record = next(item for item in filtered if item.get("id") == selected)
+        left, right = st.columns([1, 1.25])
+        with left:
+            if record.get("image_b64"):
+                try:
+                    image = b64_to_image(record["image_b64"])
+                    st.image(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), caption=f"{selected} 检测结果", use_container_width=True)
+                except Exception:
+                    st.info("该记录的结果图片暂不可读取，结构化检测数据仍然完整。")
+            else:
+                empty_panel("无结果图片", "视频汇总或旧记录可能只保存结构化明细。")
+        with right:
+            st.markdown(f"#### {selected}")
+            st.caption(f"{record.get('timestamp', '')} · {record.get('source', '')}")
+            detections = record.get("detections", [])
+            if detections:
+                st.dataframe(detections, use_container_width=True, hide_index=True)
+            else:
+                st.info("本次检测未发现病害目标。")
+
+    actions = st.columns(2)
+    actions[0].download_button("下载当前筛选 CSV", export_csv(filtered), "historical_detection_data.csv", "text/csv", use_container_width=True)
+    actions[1].download_button("下载完整 JSON 备份", export_state_backup(), "road_inspection_backup.json", "application/json", use_container_width=True)
+    with st.expander("从 JSON 备份恢复历史数据"):
+        st.caption("用于部署更新或迁移后的完整恢复，会以备份中的记录、任务和档案替换当前数据。")
+        backup = st.file_uploader("选择备份文件", type=["json"], key="history_restore")
+        if st.button("恢复备份", disabled=backup is None, key="history_restore_button"):
+            try:
+                restore_state_backup(backup.getvalue())
+                st.success("历史数据、任务和病害档案已恢复。")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"备份恢复失败：{exc}")
+
+
 def render_archive():
     _backfill_archive()
-    page_header("DEFECT REGISTRY", "病害档案", "对每个病害目标执行人工复核、分类修正，并保留检测来源与更新时间。", "可追溯")
+    page_header("DEFECT REGISTRY", "病害档案", "按目标建立独立档案，支持日期与状态筛选、人工复核、分类修正和来源追溯。", "持久保存")
     archive = st.session_state["archives"]
     if not archive:
         empty_panel("暂无病害档案", "完成检测后，每个病害目标会自动拆分为独立档案。")
         return
+    records_by_id = {record.get("id"): record for record in get_records()}
+    for item in archive:
+        if not item.get("检测时间"):
+            item["检测时间"] = records_by_id.get(item.get("记录编号"), {}).get("timestamp", item.get("更新时间", ""))
+
     c1, c2, c3 = st.columns(3)
     c1.metric("档案总数", len(archive))
     c2.metric("已复核", sum(i["复核状态"] == "已复核" for i in archive))
     c3.metric("发生修正", sum(i["原始分类"] != i["当前分类"] for i in archive))
-    selected_id = st.selectbox("选择档案", [item["档案编号"] for item in archive])
-    item = next(x for x in archive if x["档案编号"] == selected_id)
+
+    valid_days = [item.get("检测时间", "")[:10] for item in archive if len(item.get("检测时间", "")) >= 10]
+    parsed_days = [datetime.strptime(day, "%Y-%m-%d").date() for day in valid_days]
+    min_day = min(parsed_days) if parsed_days else datetime.now().date()
+    max_day = max(parsed_days) if parsed_days else datetime.now().date()
+    f1, f2, f3, f4 = st.columns([1, 1, 1, 1.2])
+    date_from = f1.date_input("开始日期", value=min_day, min_value=min_day, max_value=max_day, key="archive_from")
+    date_to = f2.date_input("结束日期", value=max_day, min_value=min_day, max_value=max_day, key="archive_to")
+    review_status = f3.selectbox("复核状态", ["全部", "待复核", "已复核"], key="archive_status")
+    class_options = sorted({item.get("当前分类", "unknown") for item in archive})
+    selected_class = f4.selectbox("病害分类", ["全部", *class_options], key="archive_class")
+
+    filtered = []
+    for item in archive:
+        day = item.get("检测时间", item.get("更新时间", ""))[:10]
+        if day and not (date_from.isoformat() <= day <= date_to.isoformat()):
+            continue
+        if review_status != "全部" and item.get("复核状态") != review_status:
+            continue
+        if selected_class != "全部" and item.get("当前分类") != selected_class:
+            continue
+        filtered.append(item)
+    if not filtered:
+        empty_panel("没有符合条件的档案", "请调整日期、复核状态或病害分类筛选条件。")
+        return
+
+    selected_id = st.selectbox("选择档案", [item["档案编号"] for item in filtered])
+    item = next(x for x in filtered if x["档案编号"] == selected_id)
     left, right = st.columns([1, 1])
     with left:
         st.markdown("#### 来源追溯")
-        st.json({key: item[key] for key in ["档案编号", "记录编号", "目标序号", "来源", "原始分类", "置信度", "更新时间"]}, expanded=True)
+        trace_keys = ["档案编号", "记录编号", "目标序号", "检测时间", "来源", "原始分类", "置信度", "更新时间"]
+        st.json({key: item.get(key, "") for key in trace_keys}, expanded=True)
+        source_record = records_by_id.get(item.get("记录编号"), {})
+        if source_record.get("image_b64"):
+            try:
+                source_image = b64_to_image(source_record["image_b64"])
+                st.image(cv2.cvtColor(source_image, cv2.COLOR_BGR2RGB), caption="来源检测结果", use_container_width=True)
+            except Exception:
+                pass
     with right:
         st.markdown("#### 人工复核")
         categories = ["纵向裂缝", "横向裂缝", "网状裂缝", "轻微裂缝", "严重裂缝", "小型坑洼", "大型坑洼", "骨料外露", "路面沉陷", "其他"]
@@ -565,9 +737,14 @@ def render_archive():
         note = st.text_area("复核说明", value=item.get("修正说明", ""), placeholder="记录修正依据或处置建议")
         if st.button("保存复核结果", type="primary"):
             item.update({"当前分类": corrected, "严重程度": severity, "复核状态": "已复核", "修正说明": note, "更新时间": datetime.now().strftime("%Y-%m-%d %H:%M")})
-            st.success("复核结果已保存到当前会话档案。")
-    st.markdown("#### 档案列表")
-    st.dataframe(archive, use_container_width=True, hide_index=True)
+            if persist_session_state():
+                st.success("复核结果已持久保存，刷新页面后仍可查询。")
+            else:
+                st.error("复核结果暂未写入持久化文件，请先下载备份。")
+    st.markdown(f"#### 档案列表 · {len(filtered)} 条")
+    st.dataframe(filtered, use_container_width=True, hide_index=True)
+    archive_bytes = pd.DataFrame(filtered).to_csv(index=False).encode("utf-8-sig")
+    st.download_button("导出当前档案 CSV", archive_bytes, "road_defect_archive_filtered.csv", "text/csv")
 
 
 def render_dashboard():
@@ -693,7 +870,8 @@ def render_system():
         enable_grad = st.toggle("默认启用 Grad-CAM", value=bool(cfg["enable_grad_cam"]))
         if st.button("保存模型配置", type="primary"):
             cfg.update({"confidence": conf, "iou": iou, "enable_clip": enable_clip, "enable_grad_cam": enable_grad})
-            st.success("模型参数已保存到当前会话。")
+            persist_session_state()
+            st.success("模型参数已持久保存。")
         st.dataframe([{"模型": "YOLOv11", "权重": os.path.basename(path) if path else "未找到", "状态": "在线" if model else "离线"}, {"模型": "CLIP ViT-B/32", "权重": "按需缓存", "状态": "待调用"}], use_container_width=True, hide_index=True)
     with devices:
         import torch
@@ -718,6 +896,7 @@ PAGE_RENDERERS = {
     "实时检测": render_realtime,
     "CLIP 创新中心": render_clip_center,
     "检测任务": render_tasks,
+    "往期数据": render_history,
     "病害档案": render_archive,
     "数据看板": render_dashboard,
     "模型与实验": render_models,

@@ -6,12 +6,18 @@ import sys
 import time
 import csv
 import io
+import json
+import threading
 import numpy as np
 import streamlit as st
 from datetime import datetime
 
 # 项目根目录
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(APP_DIR, "data")
+STATE_FILE = os.path.join(DATA_DIR, "platform_state.json")
+PERSISTED_KEYS = ("records", "tasks", "archives", "clip_cases", "system_settings")
+_STATE_LOCK = threading.RLock()
 
 # ═══════════════════════════════════════════════════
 #  深色科技风 CSS（所有页面共用）
@@ -301,11 +307,96 @@ def get_grad_cam(model, image, conf=0.25, iou=0.45):
 
 
 # ═══════════════════════════════════════════════════
-#  会话存储（session_state）
+#  持久化存储（服务端 JSON + session_state 缓存）
 # ═══════════════════════════════════════════════════
 
+def _json_default(value):
+    """Convert numpy values used by detection/CLIP into JSON-safe values."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _load_persistent_state():
+    if not os.path.exists(STATE_FILE):
+        return {}
+    try:
+        with _STATE_LOCK, open(STATE_FILE, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def persist_session_state():
+    """Atomically persist records, tasks, archives, cases and settings."""
+    init_session_state()
+    payload = {
+        "version": 1,
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        **{key: st.session_state.get(key) for key in PERSISTED_KEYS},
+    }
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        temporary = f"{STATE_FILE}.tmp"
+        with _STATE_LOCK:
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False, indent=2, default=_json_default)
+            os.replace(temporary, STATE_FILE)
+        st.session_state["storage_error"] = ""
+        st.session_state["storage_updated_at"] = payload["updated_at"]
+        return True
+    except (OSError, TypeError, ValueError) as exc:
+        st.session_state["storage_error"] = str(exc)
+        return False
+
+
+def export_state_backup():
+    """Return a portable JSON backup of all operational data."""
+    init_session_state()
+    payload = {
+        "version": 1,
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        **{key: st.session_state.get(key) for key in PERSISTED_KEYS},
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default).encode("utf-8")
+
+
+def restore_state_backup(raw_data):
+    """Validate and restore a backup created by export_state_backup."""
+    if isinstance(raw_data, bytes):
+        raw_data = raw_data.decode("utf-8")
+    payload = json.loads(raw_data)
+    if not isinstance(payload, dict):
+        raise ValueError("备份文件格式无效")
+    list_keys = ("records", "tasks", "archives", "clip_cases")
+    for key in list_keys:
+        if key in payload and not isinstance(payload[key], list):
+            raise ValueError(f"备份字段 {key} 格式无效")
+    if "system_settings" in payload and not isinstance(payload["system_settings"], dict):
+        raise ValueError("备份字段 system_settings 格式无效")
+    init_session_state()
+    for key in PERSISTED_KEYS:
+        if key in payload:
+            st.session_state[key] = payload[key]
+    if not persist_session_state():
+        raise OSError(st.session_state.get("storage_error") or "历史数据写入失败")
+
+
+def get_storage_info():
+    """Return persistence status for the UI."""
+    init_session_state()
+    return {
+        "path": STATE_FILE,
+        "exists": os.path.exists(STATE_FILE),
+        "updated_at": st.session_state.get("storage_updated_at", ""),
+        "error": st.session_state.get("storage_error", ""),
+    }
+
 def init_session_state():
-    """初始化 session_state"""
+    """Initialize the session from durable storage once per browser session."""
     defaults = {
         "records": [],
         "tasks": [],
@@ -318,6 +409,14 @@ def init_session_state():
             "enable_clip": False,
         },
     }
+    if not st.session_state.get("_persistent_state_loaded"):
+        saved = _load_persistent_state()
+        for key in PERSISTED_KEYS:
+            if key in saved:
+                defaults[key] = saved[key]
+        st.session_state["storage_updated_at"] = saved.get("updated_at", "")
+        st.session_state["storage_error"] = ""
+        st.session_state["_persistent_state_loaded"] = True
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value.copy() if isinstance(value, (dict, list)) else value
@@ -325,7 +424,7 @@ def init_session_state():
 
 def save_record(source, detections, image_b64=None):
     """
-    保存一条检测记录到 session_state
+    保存一条检测记录并写入服务端持久化文件
 
     Args:
         source: 检测来源（"图片检测" / "开放词汇检测"）
@@ -349,11 +448,12 @@ def save_record(source, detections, image_b64=None):
         "detection_count": len(detections),
     }
     st.session_state["records"].append(record)
+    persist_session_state()
     return record_id
 
 
 def get_records():
-    """获取所有会话记录"""
+    """获取全部历史记录（首次访问时从持久化文件恢复）"""
     init_session_state()
     return st.session_state["records"]
 
