@@ -35,6 +35,7 @@ from streamlit_utils import (
 
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PLATFORM_VERSION = "2.2"
 
 NAV_ITEMS = [
     ("数据总览", "⌂"),

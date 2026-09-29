@@ -3,13 +3,29 @@
 
 import os
 import sys
+import importlib
 
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from platform_ui import NAV_ITEMS, PAGE_RENDERERS
-from streamlit_utils import apply_theme, auto_load_model, init_session_state
+import streamlit_utils as app_utils
+
+# Streamlit Cloud may keep imported modules alive during a hot deployment.
+# Reload only when upgrading an already-running pre-v2.2 process.
+if getattr(app_utils, "PLATFORM_VERSION", "") != "2.2":
+    app_utils = importlib.reload(app_utils)
+
+import platform_ui as platform
+
+if getattr(platform, "PLATFORM_VERSION", "") != "2.2":
+    platform = importlib.reload(platform)
+
+NAV_ITEMS = platform.NAV_ITEMS
+PAGE_RENDERERS = platform.PAGE_RENDERERS
+apply_theme = app_utils.apply_theme
+auto_load_model = app_utils.auto_load_model
+init_session_state = app_utils.init_session_state
 
 
 st.set_page_config(
